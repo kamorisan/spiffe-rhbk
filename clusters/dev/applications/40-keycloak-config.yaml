@@ -16,7 +16,7 @@ spec:
     namespace: rhbk-demo
   syncPolicy:
     automated:
-      prune: false
+      prune: true
       selfHeal: false
     syncOptions:
       - CreateNamespace=false
