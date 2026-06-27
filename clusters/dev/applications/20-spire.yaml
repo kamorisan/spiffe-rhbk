@@ -20,3 +20,12 @@ spec:
     syncOptions:
       - CreateNamespace=false
       - SkipDryRunOnMissingResource=true
+  ignoreDifferences:
+  - group: operator.openshift.io
+    kind: SpireServer
+    jsonPointers:
+    - /status
+  - group: operator.openshift.io
+    kind: SpireAgent
+    jsonPointers:
+    - /status
