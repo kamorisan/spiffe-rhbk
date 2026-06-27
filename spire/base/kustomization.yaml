@@ -7,4 +7,5 @@ resources:
   - spireagent.yaml
   - spiffecsidriver.yaml
   - spireoidcdiscoveryprovider.yaml
-  - clusterspiffeid-myclient.yaml
+  # clusterspiffeid-myclient.yaml removed - using default ClusterSPIFFEID template
+  # Default template: spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}

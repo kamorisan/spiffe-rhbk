@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: configure-keycloak-v2
+  name: configure-keycloak-v3
   namespace: rhbk-demo
 spec:
   backoffLimit: 5
@@ -62,7 +62,8 @@ spec:
 
           # Create SPIFFE Identity Provider (idempotent)
           IDP_ALIAS="spiffe"
-          BUNDLE_ENDPOINT="https://spire-server.spiffe-system.svc.cluster.local:8443"
+          # Operator-managed SPIRE Server is in zero-trust-workload-identity-manager namespace
+          BUNDLE_ENDPOINT="https://spire-server.zero-trust-workload-identity-manager.svc.cluster.local:8443"
           TRUST_DOMAIN="example.org"
 
           if ! /opt/keycloak/bin/kcadm.sh get identity-provider/instances/$IDP_ALIAS -r spiffe --config /tmp/kcadm.config 2>/dev/null; then
@@ -84,7 +85,9 @@ spec:
 
           # Create Client (idempotent)
           CLIENT_ID="myclient"
-          CLIENT_SPIFFE_ID="spiffe://example.org/myclient"
+          # Using default ClusterSPIFFEID template: spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}
+          # For jwt-test-client: namespace=rhbk-demo, serviceAccount=myclient
+          CLIENT_SPIFFE_ID="spiffe://example.org/ns/rhbk-demo/sa/myclient"
 
           CLIENT_UUID=$(/opt/keycloak/bin/kcadm.sh get clients -r spiffe \
             -q clientId=$CLIENT_ID \
