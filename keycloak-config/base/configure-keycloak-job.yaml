@@ -21,23 +21,33 @@ spec:
         - |
           set -euo pipefail
 
-          # Wait for Keycloak to be ready
-          until curl -sf http://keycloak-service.rhbk-demo.svc:8080/realms/master; do
-            echo "Waiting for Keycloak..."
-            sleep 5
-          done
-
           # Get admin password
           ADMIN_PASSWORD=$(cat /tmp/keycloak-admin-password/password)
           ADMIN_USER="temp-admin"
 
-          # Configure kcadm.sh
-          /opt/keycloak/bin/kcadm.sh config credentials \
-            --server http://keycloak-service.rhbk-demo.svc:8080 \
-            --realm master \
-            --user "$ADMIN_USER" \
-            --password "$ADMIN_PASSWORD" \
-            --config /tmp/kcadm.config
+          # Wait for Keycloak to be ready by attempting to authenticate
+          echo "Waiting for Keycloak Admin API to be ready..."
+          MAX_ATTEMPTS=60
+          ATTEMPT=0
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            if /opt/keycloak/bin/kcadm.sh config credentials \
+              --server http://keycloak-service.rhbk-demo.svc:8080 \
+              --realm master \
+              --user "$ADMIN_USER" \
+              --password "$ADMIN_PASSWORD" \
+              --config /tmp/kcadm.config 2>/dev/null; then
+              echo "Keycloak Admin API is ready"
+              break
+            fi
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "Waiting for Keycloak... (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+            sleep 5
+          done
+
+          if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+            echo "Timeout waiting for Keycloak Admin API"
+            exit 1
+          fi
 
           # Create Realm (idempotent)
           if ! /opt/keycloak/bin/kcadm.sh get realms/spiffe --config /tmp/kcadm.config 2>/dev/null; then
