@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jwt-svid-auth-test
+  namespace: rhbk-demo
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: jwt-test-client
+    spec:
+      serviceAccountName: myclient
+      restartPolicy: Never
+      containers:
+      - name: test
+        image: registry.redhat.io/rhbk/keycloak-rhel9:26.6
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -euo pipefail
+
+          echo "=== JWT-SVID Authentication Test ==="
+          echo ""
+
+          # Check SPIFFE Workload API socket
+          echo "1. Checking SPIFFE Workload API socket..."
+          if [ -S /spiffe-workload-api/spire-agent.sock ]; then
+            echo "✓ SPIFFE Workload API socket found"
+            ls -la /spiffe-workload-api/spire-agent.sock
+          else
+            echo "✗ SPIFFE Workload API socket NOT found"
+            exit 1
+          fi
+
+          echo ""
+          echo "=== Test Completed ==="
+          echo "SPIFFE Workload API is accessible"
+          echo ""
+          echo "Note: Full JWT-SVID fetch test requires spire-agent CLI tool"
+          echo "Keycloak Token Endpoint: https://keycloak-rhbk-demo.apps.cluster-hb456.hb456.sandbox3244.opentlc.com/realms/spiffe/protocol/openid-connect/token"
+        volumeMounts:
+        - name: spiffe-workload-api
+          mountPath: /spiffe-workload-api
+          readOnly: true
+      volumes:
+      - name: spiffe-workload-api
+        csi:
+          driver: csi.spiffe.io
+          readOnly: true

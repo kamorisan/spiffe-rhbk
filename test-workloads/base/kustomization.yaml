@@ -4,3 +4,4 @@ kind: Kustomization
 resources:
   - serviceaccount-myclient.yaml
   - jwt-test-client.yaml
+  - auth-test-job.yaml

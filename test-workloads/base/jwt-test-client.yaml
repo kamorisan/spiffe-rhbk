@@ -14,16 +14,6 @@ spec:
         app: jwt-test-client
     spec:
       serviceAccountName: myclient
-      initContainers:
-      - name: install-spire-agent
-        image: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-spire-agent-rhel9@sha256:7a5f16d95fa266ba3469ee243c52353d9598d8071bfbddadeadef547f7c3ac01
-        command:
-        - sh
-        - -c
-        - cp /opt/spire/bin/spire-agent /shared/spire-agent && chmod +x /shared/spire-agent
-        volumeMounts:
-        - name: shared-bin
-          mountPath: /shared
       containers:
       - name: client
         image: cgr.dev/chainguard/wolfi-base:latest
@@ -32,13 +22,8 @@ spec:
         - name: spiffe-workload-api
           mountPath: /spiffe-workload-api
           readOnly: true
-        - name: shared-bin
-          mountPath: /usr/local/bin
-          readOnly: true
       volumes:
       - name: spiffe-workload-api
         csi:
           driver: csi.spiffe.io
           readOnly: true
-      - name: shared-bin
-        emptyDir: {}
