@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: configure-keycloak
+  name: configure-keycloak-v2
   namespace: rhbk-demo
 spec:
   backoffLimit: 5
