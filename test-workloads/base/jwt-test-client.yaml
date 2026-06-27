@@ -16,7 +16,7 @@ spec:
       serviceAccountName: myclient
       initContainers:
       - name: install-spire-agent
-        image: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-spire-agent-rhel9:latest
+        image: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-spire-agent-rhel9@sha256:7a5f16d95fa266ba3469ee243c52353d9598d8071bfbddadeadef547f7c3ac01
         command:
         - sh
         - -c
