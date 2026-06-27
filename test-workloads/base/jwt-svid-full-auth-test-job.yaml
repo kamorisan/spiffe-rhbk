@@ -20,15 +20,15 @@ spec:
         - sh
         - -c
         - |
-          # Find and copy spire-agent binary
-          find /usr -name "spire-agent" -type f -exec cp {} /shared/spire-agent \; 2>/dev/null || \
-          find /opt -name "spire-agent" -type f -exec cp {} /shared/spire-agent \; 2>/dev/null || \
-          find / -name "spire-agent" -type f 2>/dev/null | head -1 | xargs -I {} cp {} /shared/spire-agent || \
-          echo "spire-agent binary not found"
-
-          if [ -f /shared/spire-agent ]; then
+          # Copy spire-agent binary from known location in SPIRE Agent image
+          if [ -f /opt/spire/bin/spire-agent ]; then
+            cp /opt/spire/bin/spire-agent /shared/spire-agent
             chmod +x /shared/spire-agent
+            echo "spire-agent binary copied successfully"
             ls -la /shared/spire-agent
+          else
+            echo "ERROR: spire-agent binary not found at /opt/spire/bin/spire-agent"
+            exit 1
           fi
         volumeMounts:
         - name: shared-bin
