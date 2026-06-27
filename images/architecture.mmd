@@ -1,0 +1,51 @@
+graph TB
+    subgraph "OpenShift Cluster"
+        subgraph "rhbk-demo namespace"
+            KC[Keycloak<br/>RHBK 26.6.4]
+            PG[(PostgreSQL<br/>Database)]
+            CLIENT[jwt-test-client<br/>Test Pod]
+
+            KC -->|uses| PG
+        end
+
+        subgraph "zero-trust-workload-identity-manager namespace"
+            ZTWIM[ZTWIM Operator<br/>v1.0.1]
+            SS[SPIRE Server<br/>1.13.3]
+            SA[SPIRE Agent<br/>DaemonSet]
+            OIDC[SPIRE OIDC<br/>Discovery Provider]
+            CSID[Default<br/>ClusterSPIFFEID]
+
+            ZTWIM -.manages.-> SS
+            ZTWIM -.manages.-> SA
+            ZTWIM -.manages.-> OIDC
+            ZTWIM -.manages.-> CSID
+            SS <-->|workload<br/>registration| SA
+            SS -->|provides<br/>JWKS| OIDC
+        end
+
+        SA -.CSI Driver<br/>mounts socket.-> CLIENT
+    end
+
+    CLIENT -->|Fetch JWT-SVID| SA
+    SA -->|signs with<br/>SPIFFE ID| SS
+    SS -.returns.-> SA
+    SA -.JWT-SVID.-> CLIENT
+
+    CLIENT -->|Authenticate<br/>with JWT-SVID| KC
+    KC -->|Fetch JWKS| OIDC
+    OIDC -.public keys.-> KC
+    KC -.Access Token.-> CLIENT
+
+    CSID -.SPIFFE ID template.-> SA
+
+    classDef operator fill:#ee0000,stroke:#fff,stroke-width:2px,color:#fff
+    classDef spire fill:#00c853,stroke:#fff,stroke-width:2px,color:#fff
+    classDef keycloak fill:#008aaa,stroke:#fff,stroke-width:2px,color:#fff
+    classDef client fill:#ff6d00,stroke:#fff,stroke-width:2px,color:#fff
+    classDef db fill:#4285f4,stroke:#fff,stroke-width:2px,color:#fff
+
+    class ZTWIM operator
+    class SS,SA,OIDC,CSID spire
+    class KC keycloak
+    class CLIENT client
+    class PG db

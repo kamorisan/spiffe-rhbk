@@ -14,6 +14,12 @@ Red Hat build of Keycloak (RHBK) + OpenShift Zero Trust Workload Identity Manage
 
 ## アーキテクチャ
 
+### システム構成図
+
+![Architecture Diagram](images/architecture.svg)
+
+### デプロイメントフロー
+
 ```
 00-namespaces → 10-operators → 20-spire → 30-rhbk → 40-keycloak-config → 50-test-workloads
 ```
@@ -24,6 +30,29 @@ Red Hat build of Keycloak (RHBK) + OpenShift Zero Trust Workload Identity Manage
 - **30-rhbk**: Keycloak + PostgreSQL作成
 - **40-keycloak-config**: Keycloak Realm / SPIFFE IdP / Client自動設定
 - **50-test-workloads**: JWT-SVID認証テスト用Pod（Deployment）
+
+### JWT-SVID認証フロー
+
+![Authentication Flow Diagram](images/auth-flow.svg)
+
+**認証フロー詳細:**
+
+1. **JWT-SVID取得**: jwt-test-client PodがSPIRE AgentからJWT-SVIDを取得
+   - SPIFFE CSI DriverがWorkload API socketをマウント
+   - SPIRE ServerがSPIFFE ID `spiffe://example.org/ns/rhbk-demo/sa/myclient`で署名したJWTを発行
+
+2. **Token Request**: KeycloakのToken EndpointにJWT-SVIDを送信
+   - `client_assertion_type`: `urn:ietf:params:oauth:client-assertion-type:jwt-spiffe`
+   - `client_assertion`: JWT-SVID
+
+3. **JWT-SVID検証**: KeycloakがJWT-SVIDを検証
+   - JWT-SVIDの`sub`クレームからClient IDを特定
+   - SPIFFE IdP経由でSPIRE OIDC Discovery ProviderからJWKS取得
+   - 公開鍵でJWT署名を検証
+
+4. **Access Token発行**: 検証成功後、Keycloak Access Tokenを発行
+   - HTTP 200 OK
+   - Bearer Token（有効期限: 300秒）
 
 ## デプロイ
 
