@@ -93,17 +93,41 @@ oc exec $POD -n rhbk-demo -- ls -la /spiffe-workload-api/spire-agent.sock
 
 ## テスト
 
-### 認証テスト
+### JWT-SVID認証テスト（推奨）
 
-手動テスト手順: [Manual Test Procedure](docs/manual-test-procedure.md)
+完全な認証テストガイド: **[JWT-SVID Authentication Guide](docs/JWT-SVID-AUTHENTICATION-GUIDE.md)**
 
-テストスクリプト:
+**クイックスタート:**
 
 ```bash
+# Step 1: spire-agentバイナリをインストール
+./scripts/install-spire-agent-binary.sh
+
+# Step 2: Keycloak Client設定を修正
+./scripts/fix-keycloak-client-config.sh
+
+# Step 3: Keycloak pod再起動
+oc delete pod keycloak-0 -n rhbk-demo
+oc wait --for=condition=Ready pod/keycloak-0 -n rhbk-demo --timeout=180s
+
+# Step 4: 認証テスト実行
+./scripts/test-jwt-svid-complete.sh
+```
+
+**成功時の結果:**
+- HTTP 200 OK
+- Access Token取得
+- ログ保存: `logs/SUCCESS-GITOPS-YYYYMMDD-HHMMSS.json`
+
+### その他のテストスクリプト
+
+```bash
+# 簡易テスト（参考用）
 ./scripts/test-jwt-svid-auth.sh
 ```
 
 ## ドキュメント
 
-- [GitOps環境構築ガイドライン](docs/rhbk_spiffe_gitops_environment_guidelines.md)
-- [手動テスト手順](docs/manual-test-procedure.md)
+- **[JWT-SVID認証テストガイド](docs/JWT-SVID-AUTHENTICATION-GUIDE.md)** - 完全な認証テスト手順
+- [GitOps環境構築ガイドライン](docs/rhbk_spiffe_gitops_environment_guidelines.md) - 環境構築の設計原則
+- [手動テスト手順](docs/manual-test-procedure.md) - 手動テスト参考資料
