@@ -91,6 +91,19 @@ oc exec $POD -n rhbk-demo -- ls -la /spiffe-workload-api/spire-agent.sock
 - Client Authenticator: `federated-jwt`
 - client_assertion_type: `urn:ietf:params:oauth:client-assertion-type:jwt-spiffe`
 
+## テスト
+
+### 認証テスト
+
+手動テスト手順: [Manual Test Procedure](docs/manual-test-procedure.md)
+
+テストスクリプト:
+
+```bash
+./scripts/test-jwt-svid-auth.sh
+```
+
 ## ドキュメント
 
 - [GitOps環境構築ガイドライン](docs/rhbk_spiffe_gitops_environment_guidelines.md)
+- [手動テスト手順](docs/manual-test-procedure.md)
