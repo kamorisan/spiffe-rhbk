@@ -7,3 +7,4 @@ resources:
 patches:
   - path: patches/ztwim-patch.yaml
   - path: patches/spireserver-patch.yaml
+  - path: patches/spireoidcdiscoveryprovider-patch.yaml

@@ -1,0 +1,6 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireOIDCDiscoveryProvider
+metadata:
+  name: cluster
+spec:
+  jwtIssuer: https://spire-oidc-discovery-provider-spiffe-system.apps.cluster-hb456.hb456.sandbox3244.opentlc.com
