@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/kamori/spiffe-rhbk.git
+    repoURL: https://github.com/kamorisan/spiffe-rhbk.git
     targetRevision: main
     path: clusters/dev/applications
     directory:
