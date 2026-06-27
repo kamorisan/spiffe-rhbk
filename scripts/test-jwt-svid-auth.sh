@@ -67,7 +67,7 @@ echo ""
 echo "3. Fetching JWT-SVID from test client Pod..."
 if [ -n "$TEST_CLIENT_POD" ]; then
     JWT_SVID=$(oc exec "$TEST_CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- sh -c \
-        "timeout 10 nc -U /spiffe-workload-api/spire-agent.sock" 2>/dev/null | grep -oP 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' | head -1 || echo "")
+        "timeout 10 nc -U /spiffe-workload-api/spire-agent.sock" 2>/dev/null | grep -Eo 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' | head -1 || echo "")
 
     if [ -z "$JWT_SVID" ]; then
         echo "⚠ Could not fetch JWT-SVID from test client pod (gRPC Workload API requires proper client)"
@@ -97,23 +97,47 @@ if [ -z "$JWT_SVID" ]; then
     echo "  Or from a pod with SPIFFE CSI volume:"
     echo "  (Requires spire-agent CLI or gRPC client)"
 
-    # For now, use a mock JWT for demonstration
+    # Try to generate JWT using SPIRE Server (for testing)
+    echo "  Attempting to use SPIRE Server to generate test token..."
     echo ""
-    echo "⚠ Automatic JWT-SVID fetch requires:"
-    echo "  - spire-agent CLI tool in the client pod, OR"
-    echo "  - gRPC client for SPIFFE Workload API"
+
+    # Check if we can exec into SPIRE Server
+    SPIRE_SERVER_POD=$(oc get pod -n "$SPIRE_NAMESPACE" -l app.kubernetes.io/name=spire-server -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+
+    if [ -z "$SPIRE_SERVER_POD" ]; then
+        echo "✗ SPIRE Server Pod not found"
+        echo ""
+        echo "Manual test procedure (see docs/manual-test-procedure.md):"
+        exit 0
+    fi
+
+    echo "  Checking for registration entry..."
+    ENTRY_CHECK=$(oc exec "$SPIRE_SERVER_POD" -n "$SPIRE_NAMESPACE" -c spire-server -- \
+        /opt/spire/bin/spire-server entry show -spiffeID "$SPIFFE_ID" 2>/dev/null || echo "")
+
+    if echo "$ENTRY_CHECK" | grep -q "Found 0 entries"; then
+        echo "  ⚠ No registration entry found for SPIFFE ID: $SPIFFE_ID"
+        echo ""
+        echo "  This is expected: ClusterSPIFFEID creates entries dynamically when pods are scheduled."
+        echo "  The jwt-test-client pod should have the SPIFFE ID automatically assigned."
+        echo ""
+    fi
+
     echo ""
-    echo "Manual test procedure:"
+    echo "=== Manual Test Instructions ==="
     echo ""
-    echo "Step 1: Get a pod with SPIFFE Workload API access (jwt-test-client)"
-    echo "Step 2: Install spire-agent binary or use gRPC client"
-    echo "Step 3: Fetch JWT-SVID:"
-    echo "  spire-agent api fetch jwt -audience \"$AUDIENCE\" -socketPath /spiffe-workload-api/spire-agent.sock"
+    echo "To complete the authentication test, run the following commands:"
     echo ""
-    echo "Step 4: Extract the JWT token from the output"
+    echo "# 1. Exec into the SPIRE Server pod"
+    echo "oc exec -it $SPIRE_SERVER_POD -n $SPIRE_NAMESPACE -c spire-server -- /bin/bash"
     echo ""
-    echo "Step 5: Authenticate with Keycloak:"
+    echo "# 2. Inside the pod, generate a JWT token (development/testing method)"
+    echo "/opt/spire/bin/spire-server token generate -spiffeID $SPIFFE_ID"
     echo ""
+    echo "# 3. Or, check the actual workload entries:"
+    echo "/opt/spire/bin/spire-server entry show -selector k8s:ns:$CLIENT_NAMESPACE"
+    echo ""
+    echo "# 4. Once you have a JWT-SVID, test with Keycloak:"
     echo "curl -k -X POST \"$TOKEN_ENDPOINT\" \\"
     echo "  -H \"Content-Type: application/x-www-form-urlencoded\" \\"
     echo "  --data-urlencode \"grant_type=client_credentials\" \\"
@@ -121,8 +145,10 @@ if [ -z "$JWT_SVID" ]; then
     echo "  --data-urlencode \"client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-spiffe\" \\"
     echo "  --data-urlencode \"client_assertion=<YOUR_JWT_SVID>\""
     echo ""
-    echo "Expected result:"
+    echo "Expected successful result:"
     echo "  {\"access_token\":\"...\",\"expires_in\":300,\"token_type\":\"Bearer\",...}"
+    echo ""
+    echo "For detailed instructions, see: docs/manual-test-procedure.md"
     echo ""
 
     exit 0
