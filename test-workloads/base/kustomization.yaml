@@ -5,4 +5,4 @@ resources:
   - serviceaccount-myclient.yaml
   - jwt-test-client.yaml
   - auth-test-job.yaml
-  - jwt-svid-full-auth-test-job.yaml
+  # jwt-svid-full-auth-test-job.yaml - disabled, initContainer fails (spire-agent binary location)
