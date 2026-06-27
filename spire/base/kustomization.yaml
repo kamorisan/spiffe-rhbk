@@ -5,4 +5,6 @@ resources:
   - zerotrustworkloadidentitymanager.yaml
   - spireserver.yaml
   - spireagent.yaml
+  - spiffecsidriver.yaml
+  - spireoidcdiscoveryprovider.yaml
   - clusterspiffeid-myclient.yaml
