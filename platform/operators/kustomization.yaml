@@ -7,3 +7,4 @@ resources:
   - ztwim/subscription.yaml
   - rhbk/operatorgroup.yaml
   - rhbk/subscription.yaml
+  - argocd-clusterrole-binding.yaml

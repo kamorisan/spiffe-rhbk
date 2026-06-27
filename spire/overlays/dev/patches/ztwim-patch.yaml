@@ -4,4 +4,4 @@ metadata:
   name: cluster
   namespace: zero-trust-workload-identity-manager
 spec:
-  clusterName: cluster-hb456
+  clusterName: cluster-hb456.hb456.sandbox3244.opentlc.com
