@@ -25,7 +25,17 @@ spec:
     kind: SpireServer
     jsonPointers:
     - /status
+    - /metadata/managedFields
   - group: operator.openshift.io
     kind: SpireAgent
     jsonPointers:
     - /status
+    - /metadata/managedFields
+  - group: operator.openshift.io
+    kind: SpireServer
+    managedFieldsManagers:
+    - kube-controller-manager
+  - group: operator.openshift.io
+    kind: SpireAgent
+    managedFieldsManagers:
+    - kube-controller-manager
