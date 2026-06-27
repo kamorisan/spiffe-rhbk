@@ -6,6 +6,15 @@
 
 このガイドでは、GitOps (Argo CD) でデプロイされたRHBK + SPIRE環境で、JWT-SVID認証をテストする手順を説明します。
 
+**GitOps改善により、手動作業を4ステップから2ステップに削減しました。**
+
+### 改善内容
+
+- ✅ **Keycloak Client設定の自動化**: configure-keycloak-v3 Jobで正しいSPIFFE IDを自動設定
+- ✅ **デフォルトClusterSPIFFEID使用**: カスタムClusterSPIFFEIDを削除し、Operator管理のデフォルトテンプレートを使用
+- ✅ **Bundle Endpoint修正**: 正しいnamespace (zero-trust-workload-identity-manager) を使用
+- ✅ **Pod再起動不要**: 設定が最初から正しいため、Keycloak Pod再起動が不要
+
 ## 前提条件
 
 ✅ すべてのGitOps Applicationが`Synced`かつ`Healthy`であること
@@ -16,17 +25,25 @@ oc get application -n openshift-gitops
 
 期待される状態:
 ```
-NAME                  SYNC STATUS   HEALTH STATUS
-app-of-apps           Synced        Healthy
-00-namespaces         Synced        Healthy
-10-operators          Synced        Healthy
-20-spire              Synced        Healthy
-30-rhbk               Synced        Healthy
-40-keycloak-config    Synced        Healthy
-50-test-workloads     Synced        Healthy
+NAME                 SYNC STATUS   HEALTH STATUS
+00-namespaces        Synced        Healthy
+10-operators         Synced        Healthy
+20-spire             Synced        Healthy
+30-rhbk              Synced        Healthy
+40-keycloak-config   Synced        Healthy
+50-test-workloads    Synced        Healthy
+rhbk-spiffe-dev      Synced        Healthy
 ```
 
-## テスト手順
+**重要:** `40-keycloak-config`が`Healthy`であることを確認してください。configure-keycloak-v3 Jobが完了していることが必要です。
+
+```bash
+# Keycloak config Job確認
+oc get job configure-keycloak-v3 -n rhbk-demo
+# STATUS: Complete であること
+```
+
+## テスト手順（2ステップ）
 
 ### Step 1: spire-agentバイナリのインストール
 
@@ -71,68 +88,7 @@ cd /path/to/spiffe-rhbk
 
 ---
 
-### Step 2: Keycloak Client設定の修正
-
-Keycloak Clientの`jwt.credential.sub`を実際のSPIFFE IDに一致させます。
-
-```bash
-./scripts/fix-keycloak-client-config.sh
-```
-
-**修正内容:**
-
-デフォルトのClusterSPIFFEIDテンプレートは以下を生成します:
-```
-spiffe://example.org/ns/<namespace>/sa/<serviceaccount>
-```
-
-jwt-test-clientの場合:
-```
-spiffe://example.org/ns/rhbk-demo/sa/myclient
-```
-
-Keycloak Clientの`jwt.credential.sub`をこの値に更新します。
-
-**期待される出力:**
-```
-=== Fix Keycloak Client Configuration ===
-
-1. Finding Keycloak Pod...
-✓ Keycloak Pod: keycloak-0
-
-2. Retrieving Admin Password...
-✓ Admin password retrieved
-
-3. Checking current client configuration...
-  Current jwt.credential.sub: spiffe://example.org/myclient
-  Current jwt.credential.issuer: spiffe
-
-4. Updating client configuration...
-  Setting jwt.credential.sub to: spiffe://example.org/ns/rhbk-demo/sa/myclient
-
-5. Verifying configuration...
-✓ Configuration updated successfully
-  jwt.credential.sub: spiffe://example.org/ns/rhbk-demo/sa/myclient
-
-=== Configuration Fix Complete ===
-```
-
----
-
-### Step 3: Keycloak Pod再起動
-
-設定変更後、キャッシュをクリアするためKeycloak podを再起動します。
-
-```bash
-oc delete pod keycloak-0 -n rhbk-demo
-oc wait --for=condition=Ready pod/keycloak-0 -n rhbk-demo --timeout=180s
-```
-
-**重要:** この手順は必須です。Keycloakは公開鍵などをキャッシュしており、再起動しないと古い設定が使われ続けます。
-
----
-
-### Step 4: 認証テスト実行
+### Step 2: 認証テスト実行
 
 完全なエンドツーエンド認証テストを実行します。
 
@@ -272,16 +228,22 @@ HTTP Status: 401
 }
 ```
 
-**原因:**
-- `jwt.credential.sub`が実際のSPIFFE IDと一致していない
-- Keycloak podが再起動されておらず、古いキャッシュを使用している
+**原因（GitOps改善後は発生しないはず）:**
+- configure-keycloak-v3 Jobが正常完了していない
+- Keycloak Client設定が正しくない
 
 **解決方法:**
 ```bash
-# Step 2とStep 3を再実行
+# Keycloak config Job確認
+oc get job configure-keycloak-v3 -n rhbk-demo
+oc logs job/configure-keycloak-v3 -n rhbk-demo
+
+# 必要に応じて再実行（Job削除してArgo CDが再作成）
+oc delete job configure-keycloak-v3 -n rhbk-demo
+# Argo CDが自動的に再作成します
+
+# または手動修正スクリプトを使用（非推奨）
 ./scripts/fix-keycloak-client-config.sh
-oc delete pod keycloak-0 -n rhbk-demo
-oc wait --for=condition=Ready pod/keycloak-0 -n rhbk-demo --timeout=180s
 ```
 
 ---
@@ -404,8 +366,9 @@ logs/SUCCESS-GITOPS-YYYYMMDD-HHMMSS.json
 
 ### 関連ドキュメント
 
-- [GitOps環境構築ガイドライン](rhbk_spiffe_gitops_environment_guidelines.md)
-- [前回の成功レポート（スクリプトベース環境）](/Users/kamori/vscode/customer/mod/nec_rhbk/spiffe_demo/openshift/production/OPENSHIFT_PRODUCTION_MODE_SUCCESS_REPORT.md)
+- [GitOps環境構築ガイドライン](design/rhbk_spiffe_gitops_environment_guidelines.md)
+- [GitOps改善履歴](GITOPS-IMPROVEMENTS.md)
+- レポート: [docs/report/](report/)
 
 ### Keycloak Admin Console
 

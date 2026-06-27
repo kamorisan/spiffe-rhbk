@@ -4,7 +4,13 @@ Red Hat build of Keycloak (RHBK) + OpenShift Zero Trust Workload Identity Manage
 
 ## 概要
 
-このリポジトリは、RHBK 26.6.4とSPIRE/SPIFFEを使用したJWT-SVID認証環境を、OpenShift GitOps (Argo CD)で再現可能に構築するための構成を提供します。
+このリポジトリは、RHBK 26.6.4とSPIRE/SPIFFEを使用したJWT-SVID認証環境を、OpenShift GitOps (Argo CD)で自動構築するための構成を提供します。
+
+**主な特徴:**
+- Keycloak Client設定の完全自動化
+- デフォルトClusterSPIFFEIDテンプレート使用による一貫性
+- Application finalizerによるリソースクリーンアップ
+- 手動設定作業を最小化（4ステップ → 2ステップ）
 
 ## アーキテクチャ
 
@@ -12,12 +18,12 @@ Red Hat build of Keycloak (RHBK) + OpenShift Zero Trust Workload Identity Manage
 00-namespaces → 10-operators → 20-spire → 30-rhbk → 40-keycloak-config → 50-test-workloads
 ```
 
-- **00-namespaces**: Namespace作成
+- **00-namespaces**: Namespace作成（rhbk-demo）
 - **10-operators**: ZTWIM / RHBK Operator導入
-- **20-spire**: SPIRE Server/Agent, ClusterSPIFFEID作成
+- **20-spire**: SPIRE Server/Agent（デフォルトClusterSPIFFEID使用）
 - **30-rhbk**: Keycloak + PostgreSQL作成
-- **40-keycloak-config**: Keycloak Realm / SPIFFE IdP / Client設定
-- **50-test-workloads**: JWT-SVID認証テスト用Pod
+- **40-keycloak-config**: Keycloak Realm / SPIFFE IdP / Client自動設定
+- **50-test-workloads**: JWT-SVID認証テスト用Pod（Deployment）
 
 ## デプロイ
 
@@ -57,10 +63,30 @@ spiffe-rhbk/
 
 ## 検証
 
+### デプロイ確認
+
+全Applicationが`Synced`かつ`Healthy`であることを確認:
+
+```bash
+oc get application -n openshift-gitops
+```
+
+期待される出力:
+```
+NAME                 SYNC STATUS   HEALTH STATUS
+00-namespaces        Synced        Healthy
+10-operators         Synced        Healthy
+20-spire             Synced        Healthy
+30-rhbk              Synced        Healthy
+40-keycloak-config   Synced        Healthy
+50-test-workloads    Synced        Healthy
+rhbk-spiffe-dev      Synced        Healthy
+```
+
 ### SPIRE Server確認
 
 ```bash
-oc get spireserver cluster -n spiffe-system
+oc get spireserver cluster -n zero-trust-workload-identity-manager
 oc get pod -n zero-trust-workload-identity-manager -l app.kubernetes.io/name=spire-server
 ```
 
@@ -71,63 +97,130 @@ oc get keycloak -n rhbk-demo
 oc get pod -n rhbk-demo -l app=keycloak
 ```
 
-### JWT-SVID取得テスト
+### SPIFFE Workload API確認
 
 ```bash
-POD=$(oc get pod -n rhbk-demo -l app=jwt-test-client -o jsonpath='{.items[0].metadata.name}')
-oc exec $POD -n rhbk-demo -- ls -la /spiffe-workload-api/spire-agent.sock
+POD=$(oc get pod -n rhbk-demo -l app=jwt-test-client --field-selector=status.phase=Running -o jsonpath='{.items[?(@.metadata.ownerReferences[0].kind=="ReplicaSet")].metadata.name}' | awk '{print $1}')
+oc exec $POD -n rhbk-demo -c client -- ls -la /spiffe-workload-api/spire-agent.sock
 ```
 
-## Known Good Values
+## 構成詳細
 
-- RHBK: 26.6.4
-- ZTWIM Operator: stable-v1
-- SpireServer profile: `https_web`
-- Trust Domain: `example.org`
-- CA Key Type: `ec-p256`
-- Keycloak Features: `spiffe`, `client-auth-federated`
-- SPIFFE IdP alias: `spiffe`
-- Bundle Endpoint: `https://spire-server.spiffe-system.svc.cluster.local:8443`
-- Client Authenticator: `federated-jwt`
-- client_assertion_type: `urn:ietf:params:oauth:client-assertion-type:jwt-spiffe`
+### バージョン
 
-## テスト
+- **RHBK**: 26.6.4
+- **ZTWIM Operator**: stable-v1
+- **SPIRE Agent**: 1.13.3-dev
 
-### JWT-SVID認証テスト（推奨）
+### SPIRE設定
+
+- **SpireServer profile**: `https_web`
+- **Trust Domain**: `example.org`
+- **CA Key Type**: `ec-p256`
+- **ClusterSPIFFEID**: デフォルトテンプレート使用
+  ```
+  spiffe://{{ .TrustDomain }}/ns/{{ .PodMeta.Namespace }}/sa/{{ .PodSpec.ServiceAccountName }}
+  ```
+- **SPIRE Server Endpoint**: `https://spire-server.zero-trust-workload-identity-manager.svc.cluster.local:8443`
+
+### Keycloak設定
+
+- **Realm**: `spiffe`
+- **Features**: `spiffe`, `client-auth-federated`
+- **SPIFFE IdP alias**: `spiffe`
+- **Bundle Endpoint**: `https://spire-server.zero-trust-workload-identity-manager.svc.cluster.local:8443`
+- **Client ID**: `myclient`
+- **Client Authenticator**: `federated-jwt`
+- **Client SPIFFE ID**: `spiffe://example.org/ns/rhbk-demo/sa/myclient` (自動設定)
+- **client_assertion_type**: `urn:ietf:params:oauth:client-assertion-type:jwt-spiffe`
+
+## JWT-SVID認証テスト
 
 完全な認証テストガイド: **[JWT-SVID Authentication Guide](docs/JWT-SVID-AUTHENTICATION-GUIDE.md)**
 
-**クイックスタート:**
+### クイックスタート
+
+GitOps改善により、**手動作業を4ステップから2ステップに削減**しました。
 
 ```bash
 # Step 1: spire-agentバイナリをインストール
 ./scripts/install-spire-agent-binary.sh
 
-# Step 2: Keycloak Client設定を修正
-./scripts/fix-keycloak-client-config.sh
-
-# Step 3: Keycloak pod再起動
-oc delete pod keycloak-0 -n rhbk-demo
-oc wait --for=condition=Ready pod/keycloak-0 -n rhbk-demo --timeout=180s
-
-# Step 4: 認証テスト実行
+# Step 2: 認証テスト実行
 ./scripts/test-jwt-svid-complete.sh
 ```
 
-**成功時の結果:**
-- HTTP 200 OK
-- Access Token取得
-- ログ保存: `logs/SUCCESS-GITOPS-YYYYMMDD-HHMMSS.json`
+### 成功時の出力例
 
-### その他のテストスクリプト
-
-```bash
-# 簡易テスト（参考用）
-./scripts/test-jwt-svid-auth.sh
 ```
+✅ SUCCESS: Keycloak authentication successful!
+
+Response:
+{
+  "access_token": "eyJhbGci...",
+  "expires_in": 300,
+  "token_type": "Bearer",
+  "scope": "email profile"
+}
+
+Summary:
+  ✓ Access Token: eyJhbGci...
+  ✓ Token Type: Bearer
+  ✓ Expires In: 300s
+
+  ✓ Result saved to: logs/SUCCESS-GITOPS-20260627-164556.json
+```
+
+### 自動化された設定
+
+以下の設定が自動的に正しく構成されます：
+
+- ✅ **Keycloak Client SPIFFE ID**: `spiffe://example.org/ns/rhbk-demo/sa/myclient`
+- ✅ **Bundle Endpoint**: `https://spire-server.zero-trust-workload-identity-manager.svc.cluster.local:8443`
+- ✅ **ClusterSPIFFEID**: デフォルトテンプレート使用
+
+**従来必要だった手動作業（不要になりました）:**
+- ~~Keycloak Client設定の修正~~
+- ~~Keycloak Pod再起動~~
 
 ## ドキュメント
 
+### テスト手順
+
 - **[JWT-SVID認証テストガイド](docs/JWT-SVID-AUTHENTICATION-GUIDE.md)** - 完全な認証テスト手順
-- [GitOps環境構築ガイドライン](docs/rhbk_spiffe_gitops_environment_guidelines.md) - 環境構築の設計原則
-- [手動テスト手順](docs/manual-test-procedure.md) - 手動テスト参考資料
+
+### 設計資料
+
+- [GitOps環境構築ガイドライン](docs/design/rhbk_spiffe_gitops_environment_guidelines.md) - 環境構築の設計原則
+- [GitOps改善履歴](docs/GITOPS-IMPROVEMENTS.md) - 自動化改善の詳細
+
+### レポート
+
+- [docs/report/](docs/report/) - 調査レポート・トラブルシューティング記録
+
+## トラブルシューティング
+
+### Application削除がスタックする場合
+
+Operator管理リソース（SpireServer, SpireOIDCDiscoveryProvider等）に`foregroundDeletion` finalizerが付いている場合、子リソースの削除を待ちます。エラー状態のDeploymentがある場合は手動で削除します。
+
+```bash
+# スタック状況確認
+oc get application -n openshift-gitops
+
+# Operator管理リソース確認
+oc get spireserver,spireoidcdiscoveryprovider -n zero-trust-workload-identity-manager
+
+# 必要に応じて手動削除
+oc delete deployment spire-spiffe-oidc-discovery-provider -n zero-trust-workload-identity-manager --force --grace-period=0
+```
+
+### Pod選択スクリプトエラー
+
+JobとDeploymentが同じラベルを持つため、スクリプトがJob Podを誤選択する場合があります。スクリプトは`ownerReferences`でDeployment Podを選択するよう修正済みです。
+
+```bash
+# 正しいPod選択例
+CLIENT_POD=$(oc get pod -n rhbk-demo -l app=jwt-test-client --field-selector=status.phase=Running \
+  -o jsonpath='{.items[?(@.metadata.ownerReferences[0].kind=="ReplicaSet")].metadata.name}' | awk '{print $1}')
+```

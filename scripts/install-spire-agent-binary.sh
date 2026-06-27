@@ -33,10 +33,10 @@ fi
 
 echo "✓ SPIRE Agent Pod: $SPIRE_AGENT_POD"
 
-# Get jwt-test-client Pod
+# Get jwt-test-client Pod (Running Deployment pod, not Job pods)
 echo ""
 echo "2. Finding jwt-test-client Pod..."
-CLIENT_POD=$(oc get pod -n "$CLIENT_NAMESPACE" -l app="$CLIENT_POD_LABEL" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+CLIENT_POD=$(oc get pod -n "$CLIENT_NAMESPACE" -l app="$CLIENT_POD_LABEL" --field-selector=status.phase=Running -o jsonpath='{.items[?(@.metadata.ownerReferences[0].kind=="ReplicaSet")].metadata.name}' 2>/dev/null | awk '{print $1}' || echo "")
 
 if [ -z "$CLIENT_POD" ]; then
     echo "✗ jwt-test-client Pod not found in namespace $CLIENT_NAMESPACE"
@@ -64,8 +64,10 @@ echo ""
 echo "4. Extracting spire-agent binary from SPIRE Agent pod..."
 TEMP_FILE="/tmp/spire-agent-binary-$$"
 
-# Try different possible locations
-if oc exec "$SPIRE_AGENT_POD" -n "$SPIRE_NAMESPACE" -c spire-agent -- cat /opt/spire/bin/spire-agent > "$TEMP_FILE" 2>/dev/null; then
+# Try different possible locations (RHBK Operator image uses /spire-agent)
+if oc exec "$SPIRE_AGENT_POD" -n "$SPIRE_NAMESPACE" -c spire-agent -- cat /spire-agent > "$TEMP_FILE" 2>/dev/null; then
+    echo "✓ Extracted from /spire-agent"
+elif oc exec "$SPIRE_AGENT_POD" -n "$SPIRE_NAMESPACE" -c spire-agent -- cat /opt/spire/bin/spire-agent > "$TEMP_FILE" 2>/dev/null; then
     echo "✓ Extracted from /opt/spire/bin/spire-agent"
 elif oc exec "$SPIRE_AGENT_POD" -n "$SPIRE_NAMESPACE" -c spire-agent -- cat /usr/bin/spire-agent > "$TEMP_FILE" 2>/dev/null; then
     echo "✓ Extracted from /usr/bin/spire-agent"
@@ -90,18 +92,18 @@ echo "✓ Extracted binary size: $FILE_SIZE bytes"
 # Copy binary to jwt-test-client pod
 echo ""
 echo "5. Copying spire-agent binary to jwt-test-client pod..."
-oc cp "$TEMP_FILE" "$CLIENT_NAMESPACE/$CLIENT_POD:/usr/local/bin/spire-agent" -c client
+oc cp "$TEMP_FILE" "$CLIENT_NAMESPACE/$CLIENT_POD:/tmp/spire-agent" -c client
 
 # Set executable permission
 echo ""
 echo "6. Setting executable permission..."
-oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- chmod +x /usr/local/bin/spire-agent
+oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- chmod +x /tmp/spire-agent
 
 # Verify installation
 echo ""
 echo "7. Verifying installation..."
-if oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- /usr/local/bin/spire-agent --version &>/dev/null; then
-    VERSION=$(oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- /usr/local/bin/spire-agent --version 2>&1 || echo "unknown")
+if oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- /tmp/spire-agent --version &>/dev/null; then
+    VERSION=$(oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- /tmp/spire-agent --version 2>&1 || echo "unknown")
     echo "✓ spire-agent installed successfully"
     echo "  Version: $VERSION"
 else

@@ -34,11 +34,11 @@ echo "  Apps Domain: $APPS_DOMAIN"
 echo "  Keycloak Hostname: $KEYCLOAK_HOSTNAME"
 echo "  Audience: $AUDIENCE"
 
-# Get jwt-test-client Pod
+# Get jwt-test-client Pod (Running Deployment pod, not Job pods)
 echo ""
 echo "2. Finding jwt-test-client Pod..."
-CLIENT_POD=$(oc get pod -n "$CLIENT_NAMESPACE" -l app="$CLIENT_POD_LABEL" \
-    -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null | awk '{print $1}')
+CLIENT_POD=$(oc get pod -n "$CLIENT_NAMESPACE" -l app="$CLIENT_POD_LABEL" --field-selector=status.phase=Running \
+    -o jsonpath='{.items[?(@.metadata.ownerReferences[0].kind=="ReplicaSet")].metadata.name}' 2>/dev/null | awk '{print $1}')
 
 if [ -z "$CLIENT_POD" ]; then
     echo "✗ jwt-test-client Pod not found or not running"
