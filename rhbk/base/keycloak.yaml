@@ -22,6 +22,8 @@ spec:
     hostname: keycloak-rhbk-demo.CLUSTER_DOMAIN
     strict: false
     strictBackchannel: false
+  proxy:
+    headers: xforwarded
   features:
     enabled:
       - spiffe
