@@ -1,0 +1,8 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: ZeroTrustWorkloadIdentityManager
+metadata:
+  name: cluster
+  namespace: zero-trust-workload-identity-manager
+spec:
+  clusterName: cluster-dev
+  trustDomain: example.org

@@ -1,0 +1,33 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireServer
+metadata:
+  name: cluster
+  namespace: spiffe-system
+spec:
+  trustDomain: example.org
+  caKeyType: ec-p256
+  caSubject:
+    commonName: SPIRE CA
+    country: US
+    organization: Example Org
+  datastore:
+    databaseType: sqlite3
+  jwtIssuer: https://spire-oidc-discovery-provider-spiffe-system.apps.CLUSTER_DOMAIN
+  persistence:
+    accessMode: ReadWriteOnce
+    size: 1Gi
+  federation:
+    bundleEndpoint:
+      profile: https_web
+      refreshHint: 300
+      httpsWeb:
+        servingCert:
+          fileSyncInterval: 86400
+    managedRoute: "true"
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi

@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jwt-test-client
+  namespace: rhbk-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jwt-test-client
+  template:
+    metadata:
+      labels:
+        app: jwt-test-client
+    spec:
+      serviceAccountName: myclient
+      containers:
+      - name: client
+        image: cgr.dev/chainguard/wolfi-base:latest
+        command: ["/bin/sh", "-c", "sleep infinity"]
+        volumeMounts:
+        - name: spiffe-workload-api
+          mountPath: /spiffe-workload-api
+          readOnly: true
+      volumes:
+      - name: spiffe-workload-api
+        csi:
+          driver: csi.spiffe.io
+          readOnly: true

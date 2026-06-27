@@ -1,0 +1,13 @@
+apiVersion: spire.spiffe.io/v1alpha1
+kind: ClusterSPIFFEID
+metadata:
+  name: jwt-test-client
+spec:
+  spiffeIDTemplate: "spiffe://{{ .TrustDomain }}/myclient"
+  podSelector:
+    matchLabels:
+      app: jwt-test-client
+  workloadSelectorTemplates:
+    - "k8s:ns:rhbk-demo"
+    - "k8s:sa:myclient"
+    - "k8s:pod-label:app:jwt-test-client"

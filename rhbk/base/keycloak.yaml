@@ -1,0 +1,35 @@
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: rhbk-demo
+spec:
+  instances: 1
+  db:
+    vendor: postgres
+    host: postgres-service.rhbk-demo.svc.cluster.local
+    database: keycloak
+    usernameSecret:
+      name: keycloak-db-secret
+      key: username
+    passwordSecret:
+      name: keycloak-db-secret
+      key: password
+  http:
+    httpEnabled: true
+    tlsSecret: ""
+  hostname:
+    hostname: keycloak-rhbk-demo.CLUSTER_DOMAIN
+    strict: false
+    strictBackchannel: false
+  features:
+    enabled:
+      - spiffe
+      - client-auth-federated
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi

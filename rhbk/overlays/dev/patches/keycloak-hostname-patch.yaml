@@ -1,0 +1,8 @@
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: rhbk-demo
+spec:
+  hostname:
+    hostname: keycloak-rhbk-demo.apps.cluster-hb456.hb456.sandbox3244.opentlc.com

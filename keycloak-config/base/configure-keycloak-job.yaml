@@ -1,0 +1,114 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: configure-keycloak
+  namespace: rhbk-demo
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: keycloak-config
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: keycloak-config
+      containers:
+      - name: configure
+        image: registry.redhat.io/rhbk/keycloak-rhel9:26.6
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -euo pipefail
+
+          # Wait for Keycloak to be ready
+          until curl -sf http://keycloak-service.rhbk-demo.svc:8080/realms/master; do
+            echo "Waiting for Keycloak..."
+            sleep 5
+          done
+
+          # Get admin password
+          ADMIN_PASSWORD=$(cat /tmp/keycloak-admin-password/password)
+          ADMIN_USER="temp-admin"
+
+          # Configure kcadm.sh
+          /opt/keycloak/bin/kcadm.sh config credentials \
+            --server http://keycloak-service.rhbk-demo.svc:8080 \
+            --realm master \
+            --user "$ADMIN_USER" \
+            --password "$ADMIN_PASSWORD" \
+            --config /tmp/kcadm.config
+
+          # Create Realm (idempotent)
+          if ! /opt/keycloak/bin/kcadm.sh get realms/spiffe --config /tmp/kcadm.config 2>/dev/null; then
+            /opt/keycloak/bin/kcadm.sh create realms \
+              -s realm=spiffe \
+              -s enabled=true \
+              --config /tmp/kcadm.config
+            echo "Realm 'spiffe' created"
+          else
+            echo "Realm 'spiffe' already exists"
+          fi
+
+          # Create SPIFFE Identity Provider (idempotent)
+          IDP_ALIAS="spiffe"
+          BUNDLE_ENDPOINT="https://spire-server.spiffe-system.svc.cluster.local:8443"
+          TRUST_DOMAIN="example.org"
+
+          if ! /opt/keycloak/bin/kcadm.sh get identity-provider/instances/$IDP_ALIAS -r spiffe --config /tmp/kcadm.config 2>/dev/null; then
+            /opt/keycloak/bin/kcadm.sh create identity-provider/instances -r spiffe \
+              -s alias=$IDP_ALIAS \
+              -s providerId=spiffe \
+              -s enabled=true \
+              -s config.trustDomain="spiffe://$TRUST_DOMAIN" \
+              -s config.bundleEndpoint="$BUNDLE_ENDPOINT" \
+              --config /tmp/kcadm.config
+            echo "SPIFFE IdP '$IDP_ALIAS' created"
+          else
+            /opt/keycloak/bin/kcadm.sh update identity-provider/instances/$IDP_ALIAS -r spiffe \
+              -s config.trustDomain="spiffe://$TRUST_DOMAIN" \
+              -s config.bundleEndpoint="$BUNDLE_ENDPOINT" \
+              --config /tmp/kcadm.config
+            echo "SPIFFE IdP '$IDP_ALIAS' updated"
+          fi
+
+          # Create Client (idempotent)
+          CLIENT_ID="myclient"
+          CLIENT_SPIFFE_ID="spiffe://example.org/myclient"
+
+          CLIENT_UUID=$(/opt/keycloak/bin/kcadm.sh get clients -r spiffe \
+            -q clientId=$CLIENT_ID \
+            --fields id \
+            --format csv \
+            --noquotes \
+            --config /tmp/kcadm.config 2>/dev/null | tail -n 1 || echo "")
+
+          if [ -z "$CLIENT_UUID" ] || [ "$CLIENT_UUID" = "id" ]; then
+            /opt/keycloak/bin/kcadm.sh create clients -r spiffe \
+              -s clientId=$CLIENT_ID \
+              -s protocol=openid-connect \
+              -s publicClient=false \
+              -s serviceAccountsEnabled=true \
+              -s clientAuthenticatorType=federated-jwt \
+              -s 'attributes."jwt.credential.issuer"="'$IDP_ALIAS'"' \
+              -s 'attributes."jwt.credential.sub"="'$CLIENT_SPIFFE_ID'"' \
+              --config /tmp/kcadm.config
+            echo "Client '$CLIENT_ID' created"
+          else
+            /opt/keycloak/bin/kcadm.sh update clients/$CLIENT_UUID -r spiffe \
+              -s clientAuthenticatorType=federated-jwt \
+              -s 'attributes."jwt.credential.issuer"="'$IDP_ALIAS'"' \
+              -s 'attributes."jwt.credential.sub"="'$CLIENT_SPIFFE_ID'"' \
+              --config /tmp/kcadm.config
+            echo "Client '$CLIENT_ID' updated"
+          fi
+
+          echo "Keycloak configuration complete"
+        volumeMounts:
+        - name: admin-password
+          mountPath: /tmp/keycloak-admin-password
+          readOnly: true
+      volumes:
+      - name: admin-password
+        secret:
+          secretName: keycloak-initial-admin

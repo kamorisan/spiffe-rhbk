@@ -1,0 +1,16 @@
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireAgent
+metadata:
+  name: cluster
+  namespace: zero-trust-workload-identity-manager
+spec:
+  serverAddress: spire-server.zero-trust-workload-identity-manager.svc.cluster.local:8081
+  trustDomain: example.org
+  nodeAttestor:
+    k8sPsat:
+      enabled: true
+  workloadAttestors:
+    k8s:
+      enabled: true
+    unix:
+      enabled: true
