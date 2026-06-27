@@ -1,0 +1,145 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jwt-svid-full-auth-test
+  namespace: rhbk-demo
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: jwt-test-client
+    spec:
+      serviceAccountName: myclient
+      restartPolicy: Never
+      initContainers:
+      - name: copy-spire-agent
+        image: registry.redhat.io/zero-trust-workload-identity-manager/spiffe-spire-agent-rhel9@sha256:7a5f16d95fa266ba3469ee243c52353d9598d8071bfbddadeadef547f7c3ac01
+        command:
+        - sh
+        - -c
+        - |
+          # Find and copy spire-agent binary
+          find /usr -name "spire-agent" -type f -exec cp {} /shared/spire-agent \; 2>/dev/null || \
+          find /opt -name "spire-agent" -type f -exec cp {} /shared/spire-agent \; 2>/dev/null || \
+          find / -name "spire-agent" -type f 2>/dev/null | head -1 | xargs -I {} cp {} /shared/spire-agent || \
+          echo "spire-agent binary not found"
+
+          if [ -f /shared/spire-agent ]; then
+            chmod +x /shared/spire-agent
+            ls -la /shared/spire-agent
+          fi
+        volumeMounts:
+        - name: shared-bin
+          mountPath: /shared
+      containers:
+      - name: test
+        image: registry.redhat.io/ubi9/ubi:latest
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -euo pipefail
+
+          echo "=== JWT-SVID Full Authentication Test ==="
+          echo ""
+
+          SPIFFE_ENDPOINT_SOCKET=/spiffe-workload-api/spire-agent.sock
+          TOKEN_ENDPOINT="https://keycloak-rhbk-demo.apps.cluster-hb456.hb456.sandbox3244.opentlc.com/realms/spiffe/protocol/openid-connect/token"
+          AUDIENCE="https://keycloak-rhbk-demo.apps.cluster-hb456.hb456.sandbox3244.opentlc.com/realms/spiffe"
+
+          echo "1. Checking SPIFFE Workload API socket..."
+          if [ -S "$SPIFFE_ENDPOINT_SOCKET" ]; then
+            echo "✓ SPIFFE Workload API socket found"
+            ls -la "$SPIFFE_ENDPOINT_SOCKET"
+          else
+            echo "✗ SPIFFE Workload API socket NOT found"
+            exit 1
+          fi
+
+          echo ""
+          echo "2. Checking spire-agent binary..."
+          if [ -f /usr/local/bin/spire-agent ]; then
+            echo "✓ spire-agent binary available"
+            /usr/local/bin/spire-agent --version || true
+          else
+            echo "✗ spire-agent binary not found"
+            exit 1
+          fi
+
+          echo ""
+          echo "3. Fetching JWT-SVID..."
+          JWT_SVID=$(/usr/local/bin/spire-agent api fetch jwt \
+            -audience "$AUDIENCE" \
+            -socketPath "$SPIFFE_ENDPOINT_SOCKET" 2>&1 | grep -oP 'token\s*:\s*\K[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+' || echo "")
+
+          if [ -z "$JWT_SVID" ]; then
+            echo "✗ Failed to fetch JWT-SVID"
+            echo "Raw output:"
+            /usr/local/bin/spire-agent api fetch jwt -audience "$AUDIENCE" -socketPath "$SPIFFE_ENDPOINT_SOCKET" 2>&1 || true
+            exit 1
+          fi
+
+          echo "✓ JWT-SVID fetched successfully"
+          echo "JWT length: ${#JWT_SVID} characters"
+
+          echo ""
+          echo "4. Decoding JWT-SVID payload..."
+          PAYLOAD=$(echo "$JWT_SVID" | cut -d. -f2 | base64 -d 2>/dev/null || echo "{}")
+          echo "$PAYLOAD"
+
+          echo ""
+          echo "5. Authenticating with Keycloak Token Endpoint..."
+          RESPONSE=$(curl -k -s -X POST "$TOKEN_ENDPOINT" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "grant_type=client_credentials" \
+            --data-urlencode "client_id=myclient" \
+            --data-urlencode "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-spiffe" \
+            --data-urlencode "client_assertion=$JWT_SVID")
+
+          echo "Response:"
+          echo "$RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "access_token"; then
+            echo ""
+            echo "✅ SUCCESS: Keycloak authentication successful!"
+            echo "Access token received"
+            ACCESS_TOKEN=$(echo "$RESPONSE" | grep -oP '"access_token"\s*:\s*"\K[^"]+')
+            echo "Access token length: ${#ACCESS_TOKEN} characters"
+          else
+            echo ""
+            echo "✗ FAILED: Keycloak authentication failed"
+            if echo "$RESPONSE" | grep -q "error"; then
+              ERROR=$(echo "$RESPONSE" | grep -oP '"error"\s*:\s*"\K[^"]+')
+              ERROR_DESC=$(echo "$RESPONSE" | grep -oP '"error_description"\s*:\s*"\K[^"]+')
+              echo "Error: $ERROR"
+              echo "Description: $ERROR_DESC"
+            fi
+            exit 1
+          fi
+
+          echo ""
+          echo "=== Test Summary ==="
+          echo "✓ SPIFFE Workload API: Available"
+          echo "✓ JWT-SVID Fetch: Success"
+          echo "✓ Keycloak Authentication: Success"
+          echo ""
+          echo "Environment details:"
+          echo "  Token Endpoint: $TOKEN_ENDPOINT"
+          echo "  Client ID: myclient"
+          echo "  SPIFFE ID: spiffe://example.org/myclient"
+        volumeMounts:
+        - name: spiffe-workload-api
+          mountPath: /spiffe-workload-api
+          readOnly: true
+        - name: shared-bin
+          mountPath: /usr/local/bin
+          readOnly: true
+      volumes:
+      - name: spiffe-workload-api
+        csi:
+          driver: csi.spiffe.io
+          readOnly: true
+      - name: shared-bin
+        emptyDir: {}
