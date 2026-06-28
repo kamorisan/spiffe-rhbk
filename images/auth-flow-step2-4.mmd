@@ -1,0 +1,58 @@
+graph TB
+    subgraph "rhbk-demo namespace"
+        CLIENT[jwt-test-client Pod]
+        KC[Keycloak]
+        PG[(PostgreSQL)]
+    end
+
+    subgraph "zero-trust-workload-identity-manager namespace"
+        SERVER[SPIRE Server<br/>Trust Bundle]
+        OIDC[SPIRE OIDC<br/>Discovery Provider]
+    end
+
+    subgraph "External Access"
+        ROUTE[OpenShift Route<br/>keycloak-rhbk-demo.apps...]
+    end
+
+    CLIENT -->|Step 2: POST Token Endpoint<br/>with JWT-SVID| ROUTE
+    ROUTE --> KC
+
+    KC -->|Step 3a: Extract sub<br/>from JWT-SVID| KC
+    KC -->|Step 3b: Find Client<br/>by sub claim| PG
+    PG -.Client Config.-> KC
+
+    KC -->|Step 3c: Get SPIFFE IdP<br/>by issuer| PG
+    PG -.SPIFFE IdP Config.-> KC
+
+    KC -->|Step 3d: GET /.well-known/<br/>openid-configuration| OIDC
+    OIDC -.JWKS URI.-> KC
+
+    KC -->|Step 3e: GET /keys<br/>Fetch JWKS| OIDC
+    OIDC -->|Request Bundle| SERVER
+    SERVER -.Public Keys.-> OIDC
+    OIDC -.JWKS<br/>Public Keys.-> KC
+
+    KC -->|Step 3f: Verify JWT-SVID<br/>Signature with JWKS| KC
+    KC -->|Step 3g: Validate Claims<br/>sub, iss, aud, exp| KC
+
+    KC -->|Step 4a: Authentication<br/>Successful| KC
+    KC -->|Step 4b: Generate<br/>Access Token| KC
+    KC -->|Step 4c: HTTP 200 OK<br/>Return Access Token| ROUTE
+    ROUTE --> CLIENT
+
+    Note1[Authentication Complete<br/>Client can now use Access Token<br/>to access protected resources]
+    CLIENT -.success.-> Note1
+
+    classDef client fill:#ff6d00,stroke:#fff,stroke-width:2px,color:#fff
+    classDef keycloak fill:#008aaa,stroke:#fff,stroke-width:2px,color:#fff
+    classDef spire fill:#00c853,stroke:#fff,stroke-width:2px,color:#fff
+    classDef db fill:#4285f4,stroke:#fff,stroke-width:2px,color:#fff
+    classDef route fill:#f57c00,stroke:#fff,stroke-width:2px,color:#fff
+    classDef note fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+
+    class CLIENT client
+    class KC keycloak
+    class SERVER,OIDC spire
+    class PG db
+    class ROUTE route
+    class Note1 note

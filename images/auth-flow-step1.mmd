@@ -1,0 +1,51 @@
+graph TB
+    subgraph "Node (OpenShift Worker)"
+        subgraph "jwt-test-client Pod"
+            APP[Application Process]
+            SOCK[Socket Mount:<br/>/spiffe-workload-api/<br/>spire-agent.sock]
+        end
+
+        CSI[SPIFFE CSI Driver<br/>Node Plugin]
+
+        subgraph "SPIRE Agent Pod (DaemonSet)"
+            AGENT[SPIRE Agent]
+            AGENTSOCK[Workload API<br/>UNIX Socket]
+        end
+    end
+
+    subgraph "zero-trust-workload-identity-manager namespace"
+        SERVER[SPIRE Server]
+        CSID[ClusterSPIFFEID<br/>default template]
+    end
+
+    APP -->|1. Fetch JWT-SVID<br/>Request| SOCK
+    SOCK -.CSI Volume<br/>Mount.-> CSI
+    CSI -.Socket<br/>Binding.-> AGENTSOCK
+    SOCK -->|2. Workload API<br/>gRPC Call| AGENTSOCK
+    AGENTSOCK --> AGENT
+
+    AGENT -->|3. Request JWT-SVID<br/>SPIFFE ID:<br/>spiffe://example.org/ns/rhbk-demo/sa/myclient| SERVER
+
+    CSID -.SPIFFE ID<br/>Template.-> SERVER
+
+    SERVER -->|4. Sign JWT with<br/>Private Key| SERVER
+    SERVER -->|5. Return JWT-SVID| AGENT
+    AGENT -->|6. Return JWT-SVID| AGENTSOCK
+    AGENTSOCK -->|7. Return to App| SOCK
+    SOCK -->|8. JWT-SVID| APP
+
+    Note1[JWT-SVID Claims:<br/>sub: spiffe://example.org/ns/rhbk-demo/sa/myclient<br/>iss: https://spire-oidc-discovery-provider...<br/>aud: https://keycloak-rhbk-demo...<br/>exp: unix timestamp]
+
+    APP -.obtains.-> Note1
+
+    classDef app fill:#ff6d00,stroke:#fff,stroke-width:2px,color:#fff
+    classDef csi fill:#9c27b0,stroke:#fff,stroke-width:2px,color:#fff
+    classDef spire fill:#00c853,stroke:#fff,stroke-width:2px,color:#fff
+    classDef socket fill:#607d8b,stroke:#fff,stroke-width:1px,color:#fff
+    classDef note fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000
+
+    class APP app
+    class CSI csi
+    class AGENT,SERVER,CSID spire
+    class SOCK,AGENTSOCK socket
+    class Note1 note

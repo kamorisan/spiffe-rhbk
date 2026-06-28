@@ -33,26 +33,59 @@ Red Hat build of Keycloak (RHBK) + OpenShift Zero Trust Workload Identity Manage
 
 ### JWT-SVID認証フロー
 
+#### 全体フロー（シーケンス図）
+
 ![Authentication Flow Diagram](images/auth-flow.svg)
 
-**認証フロー詳細:**
+#### Step 1: JWT-SVID取得フロー
 
-1. **JWT-SVID取得**: jwt-test-client PodがSPIRE AgentからJWT-SVIDを取得
-   - SPIFFE CSI DriverがWorkload API socketをマウント
-   - SPIRE ServerがSPIFFE ID `spiffe://example.org/ns/rhbk-demo/sa/myclient`で署名したJWTを発行
+![Step 1: JWT-SVID Fetch](images/auth-flow-step1.svg)
 
-2. **Token Request**: KeycloakのToken EndpointにJWT-SVIDを送信
-   - `client_assertion_type`: `urn:ietf:params:oauth:client-assertion-type:jwt-spiffe`
-   - `client_assertion`: JWT-SVID
+**JWT-SVID取得プロセス:**
 
-3. **JWT-SVID検証**: KeycloakがJWT-SVIDを検証
-   - JWT-SVIDの`sub`クレームからClient IDを特定
-   - SPIFFE IdP経由でSPIRE OIDC Discovery ProviderからJWKS取得
-   - 公開鍵でJWT署名を検証
+1. **Application** → **SPIFFE CSI Driver**: Workload API Socketへアクセス
+   - CSI DriverがUNIXソケット（`/spiffe-workload-api/spire-agent.sock`）をマウント
+   
+2. **Application** → **SPIRE Agent**: Workload API経由でJWT-SVIDをリクエスト
+   - gRPC呼び出し（JWTSVIDsリクエスト）
+   
+3. **SPIRE Agent** → **SPIRE Server**: SPIFFE IDでJWT-SVIDを要求
+   - ClusterSPIFFEIDテンプレートに基づきSPIFFE ID決定
+   - `spiffe://example.org/ns/rhbk-demo/sa/myclient`
 
-4. **Access Token発行**: 検証成功後、Keycloak Access Tokenを発行
-   - HTTP 200 OK
-   - Bearer Token（有効期限: 300秒）
+4. **SPIRE Server**: 秘密鍵でJWT-SVIDに署名
+
+5. **SPIRE Server** → **SPIRE Agent** → **Application**: JWT-SVID返却
+   - Claims: `sub`, `iss`, `aud`, `exp`
+
+#### Step 2-4: Keycloak認証フロー
+
+![Step 2-4: Keycloak Authentication](images/auth-flow-step2-4.svg)
+
+**Keycloak認証プロセス:**
+
+**Step 2: Token Request**
+- **jwt-test-client** → **Keycloak**: Token EndpointにJWT-SVIDを送信
+  - `grant_type=client_credentials`
+  - `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-spiffe`
+  - `client_assertion=<JWT-SVID>`
+
+**Step 3: JWT-SVID検証**
+- **3a**: JWT-SVIDから`sub`クレームを抽出
+- **3b**: `jwt.credential.sub`でClientを検索（PostgreSQLから取得）
+- **3c**: Clientの`jwt.credential.issuer`からSPIFFE IdPを取得
+- **3d**: SPIRE OIDC Discovery Providerから`.well-known/openid-configuration`取得
+- **3e**: JWKS Endpoint（`/keys`）から公開鍵を取得
+- **3f**: JWT-SVIDの署名を公開鍵で検証
+- **3g**: JWTクレーム（`sub`, `iss`, `aud`, `exp`）を検証
+
+**Step 4: Access Token発行**
+- **4a**: 認証成功
+- **4b**: Access Token生成（`client_id=myclient`）
+- **4c**: HTTP 200 OK でAccess Token返却
+  - `access_token`: Bearer Token
+  - `expires_in`: 300秒
+  - `token_type`: Bearer
 
 ## デプロイ
 
