@@ -16,8 +16,8 @@ spec:
       serviceAccountName: myclient
       containers:
       - name: client
-        image: cgr.dev/chainguard/wolfi-base:latest
-        command: ["/bin/sh", "-c", "sleep infinity"]
+        image: registry.redhat.io/ubi9/ubi:latest
+        command: ["/bin/bash", "-c", "sleep infinity"]
         volumeMounts:
         - name: spiffe-workload-api
           mountPath: /spiffe-workload-api
