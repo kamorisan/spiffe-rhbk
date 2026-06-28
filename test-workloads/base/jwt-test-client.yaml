@@ -16,7 +16,7 @@ spec:
       serviceAccountName: myclient
       containers:
       - name: client
-        image: registry.redhat.io/ubi9/ubi:latest
+        image: quay.io/kamori/jwt-svid-test-client:v1.0
         command: ["/bin/bash", "-c", "sleep infinity"]
         volumeMounts:
         - name: spiffe-workload-api
