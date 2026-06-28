@@ -58,19 +58,25 @@ env:
 
 ### ⚠️ 提案3: spire-agent CLI提供（未実装）
 
-**理由:**
-- カスタムイメージ管理のオーバーヘッド
-- spire-agentバイナリ抽出スクリプトが十分に機能している
-- 手動Step 1のみで運用可能
+**✅ 2026-06-29 UPDATE: カスタムイメージ導入により完全自動化達成**
 
-**現状の運用:**
-- `install-spire-agent-binary.sh`でSPIRE Agent Podから`/spire-agent`を抽出
-- jwt-test-client Podの`/tmp/spire-agent`にコピー
-- Pod再作成時のみ再実行が必要
+カスタムコンテナイメージ（`quay.io/kamori/jwt-svid-test-client:v1.0`）を導入し、spire-agentバイナリを事前組み込みしました。
 
-**将来的な改善案:**
-- Option A: カスタムイメージビルド（推奨度: ★☆☆）
-- Option B: initContainerで動的抽出（推奨度: ★☆☆）
+**解決した問題:**
+- `oc cp`によるバイナリ破損（segfault exit code 139）
+- Pod再起動のたびの手動インストール
+- ベースイメージの互換性問題
+
+**カスタムイメージ詳細:**
+- Multi-stage Dockerfileで公式SPIRE Agent RHEL9イメージからバイナリを抽出
+- ベースイメージ: `registry.redhat.io/ubi9/ubi:latest` (RHEL9互換)
+- spire-agentバイナリ: `/usr/local/bin/spire-agent` (58MB)
+- ビルド時に`--platform linux/amd64`指定（OpenShiftクラスターのアーキテクチャに対応）
+
+**運用:**
+- Pod再起動後も自動的に動作
+- 手動インストールスクリプト（`install-spire-agent-binary.sh`）は不要（DEPRECATED）
+- GitOps完全自動化達成
 
 ---
 
@@ -93,17 +99,15 @@ oc wait --for=condition=Ready pod/keycloak-0 -n rhbk-demo --timeout=180s
 ./scripts/test-jwt-svid-complete.sh
 ```
 
-### After（改善後 - 2ステップ）
+### After（改善後 - 1ステップ）
 
 ```bash
-# Step 1: spire-agentバイナリをインストール
-./scripts/install-spire-agent-binary.sh
-
-# Step 2: 認証テスト実行
+# 認証テスト実行（spire-agentバイナリは既にカスタムイメージに組み込み済み）
 ./scripts/test-jwt-svid-complete.sh
 ```
 
 **削減された手動作業:**
+- ~~Step 1: spire-agentバイナリインストール~~ → カスタムイメージに事前組み込み
 - ~~Step 2: Keycloak Client設定修正~~ → GitOps自動化
 - ~~Step 3: Keycloak Pod再起動~~ → 不要（最初から正しい設定）
 
@@ -217,22 +221,31 @@ Result saved to: logs/SUCCESS-GITOPS-20260627-164556.json
 
 ---
 
-## 残存する手動作業（将来の改善候補）
+## ~~残存する手動作業（将来の改善候補）~~
 
-### 1. spire-agentバイナリのインストール
+### ~~1. spire-agentバイナリのインストール~~
 
-**現状**: `install-spire-agent-binary.sh`で手動インストール
+**✅ 2026-06-29 RESOLVED: カスタムイメージ導入により完全自動化**
 
-**理由**: 
-- Operator管理のSPIRE Agent imageにCLIツールが含まれていない
-- initContainerでの抽出が失敗
+~~**現状**: `install-spire-agent-binary.sh`で手動インストール~~
 
-**改善案:**
-- カスタムイメージビルド（推奨度: ★☆☆）
-- initContainerで動的抽出（推奨度: ★☆☆）
-- 認証テストを別の方法で実施（推奨度: ★☆☆）
+**解決策:** カスタムコンテナイメージ導入（`quay.io/kamori/jwt-svid-test-client:v1.0`）
 
-**優先度:** 低（現在の運用で問題なし）
+**実施内容:**
+- Multi-stage Dockerfileで公式SPIRE Agent RHEL9イメージからバイナリを抽出
+- UBI9ベースイメージでRHEL9互換性を確保
+- AMD64プラットフォーム指定（OpenShiftクラスター対応）
+- spire-agentバイナリを`/usr/local/bin/spire-agent`に配置
+
+**結果:**
+- Pod再起動後も自動的に動作
+- 手動インストールスクリプト不要
+- GitOps完全自動化達成
+
+**関連ファイル:**
+- `test-workloads/docker/Dockerfile`
+- `test-workloads/docker/README.md`
+- `test-workloads/docker/build-and-push.sh`
 
 ---
 

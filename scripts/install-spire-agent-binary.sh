@@ -1,16 +1,32 @@
 #!/bin/bash
 #
-# Install spire-agent binary into jwt-test-client pod
+# ⚠️  DEPRECATED: This script is no longer needed ⚠️
 #
-# This script copies the spire-agent binary from a running SPIRE Agent pod
-# to the jwt-test-client pod, enabling JWT-SVID authentication testing.
+# The jwt-test-client Pod now uses a custom container image
+# (quay.io/kamori/jwt-svid-test-client:v1.0) that includes
+# the spire-agent binary pre-installed at /usr/local/bin/spire-agent.
+#
+# This script was used to manually copy the spire-agent binary
+# from SPIRE Agent Pods, but this approach had issues:
+# - Binary corruption during oc cp (segfault)
+# - Manual intervention required after Pod restarts
+# - Base image compatibility issues
+#
+# The custom image solves these problems permanently.
+#
+# For testing JWT-SVID authentication, simply run:
+#   ./scripts/test-jwt-svid-complete.sh
+#
+# ---
+# Legacy script kept for reference only.
+# Install spire-agent binary into jwt-test-client pod (DEPRECATED)
 #
 # Prerequisites:
 # - SPIRE Agent pods running
 # - jwt-test-client pod running
 #
 # Usage:
-#   ./install-spire-agent-binary.sh
+#   ./install-spire-agent-binary.sh (NOT RECOMMENDED)
 
 set -euo pipefail
 

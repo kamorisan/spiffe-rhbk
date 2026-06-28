@@ -229,15 +229,17 @@ oc exec $POD -n rhbk-demo -c client -- ls -la /spiffe-workload-api/spire-agent.s
 
 ### クイックスタート
 
-GitOps改善により、**手動作業を4ステップから2ステップに削減**しました。
+GitOps改善により、**手動作業を4ステップから1ステップに削減**しました。
 
 ```bash
-# Step 1: spire-agentバイナリをインストール
-./scripts/install-spire-agent-binary.sh
-
-# Step 2: 認証テスト実行
+# 認証テスト実行（spire-agentバイナリは既にカスタムイメージに組み込み済み）
 ./scripts/test-jwt-svid-complete.sh
 ```
+
+**改善点:**
+- カスタムコンテナイメージ（`quay.io/kamori/jwt-svid-test-client:v1.0`）にspire-agentバイナリを事前組み込み
+- Pod再起動後も自動的に動作（手動インストール不要）
+- RHEL9ベースで完全な互換性を確保
 
 ### 成功時の出力例
 

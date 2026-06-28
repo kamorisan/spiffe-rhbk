@@ -6,7 +6,7 @@
 
 このガイドでは、GitOps (Argo CD) でデプロイされたRHBK + SPIRE環境で、JWT-SVID認証をテストする手順を説明します。
 
-**GitOps改善により、手動作業を4ステップから2ステップに削減しました。**
+**GitOps改善により、手動作業を4ステップから1ステップに削減しました。**
 
 ### 改善内容
 
@@ -14,6 +14,7 @@
 - ✅ **デフォルトClusterSPIFFEID使用**: カスタムClusterSPIFFEIDを削除し、Operator管理のデフォルトテンプレートを使用
 - ✅ **Bundle Endpoint修正**: 正しいnamespace (zero-trust-workload-identity-manager) を使用
 - ✅ **Pod再起動不要**: 設定が最初から正しいため、Keycloak Pod再起動が不要
+- ✅ **カスタムコンテナイメージ**: spire-agentバイナリを事前組み込み、手動インストール不要
 
 ## 前提条件
 
@@ -43,52 +44,9 @@ oc get job configure-keycloak-v3 -n rhbk-demo
 # STATUS: Complete であること
 ```
 
-## テスト手順（2ステップ）
+## テスト手順（1ステップ）
 
-### Step 1: spire-agentバイナリのインストール
-
-jwt-test-client podにspire-agentバイナリをインストールします。
-
-```bash
-cd /path/to/spiffe-rhbk
-./scripts/install-spire-agent-binary.sh
-```
-
-**実行内容:**
-- SPIRE Agent podから実行中の`spire-agent`バイナリを抽出
-- jwt-test-client podの`/tmp/spire-agent`にコピー
-- 実行権限を付与
-
-**期待される出力:**
-```
-=== Install spire-agent Binary into jwt-test-client Pod ===
-
-1. Finding SPIRE Agent Pod...
-✓ SPIRE Agent Pod: spire-agent-xxxxx
-
-2. Finding jwt-test-client Pod...
-✓ jwt-test-client Pod: jwt-test-client-xxxxxx-xxxxx
-
-3. Checking if spire-agent binary already exists...
-
-4. Extracting spire-agent binary from SPIRE Agent pod...
-✓ Extracted from /spire-agent
-✓ Extracted binary size: 59768832 bytes
-
-5. Copying spire-agent binary to jwt-test-client pod...
-
-6. Setting executable permission...
-
-7. Verifying installation...
-✓ spire-agent installed successfully
-  Version: 1.13.3-dev-unk
-
-=== Installation Complete ===
-```
-
----
-
-### Step 2: 認証テスト実行
+### 認証テスト実行
 
 完全なエンドツーエンド認証テストを実行します。
 
@@ -142,7 +100,7 @@ cd /path/to/spiffe-rhbk
 ✓ jwt-test-client Pod: jwt-test-client-xxxxxx-xxxxx
 
 3. Checking spire-agent binary...
-✓ spire-agent binary found at /tmp/spire-agent
+✓ spire-agent binary found at /usr/local/bin/spire-agent
 
 4. Fetching JWT-SVID...
   Audience: https://keycloak-rhbk-demo.apps.cluster-xxxxx.../realms/spiffe

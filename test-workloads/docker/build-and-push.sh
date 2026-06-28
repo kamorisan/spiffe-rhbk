@@ -43,9 +43,9 @@ FULL_IMAGE="${REGISTRY}/${REGISTRY_USER}/${IMAGE_NAME}:${IMAGE_TAG}"
 echo "Building image: $FULL_IMAGE"
 echo ""
 
-# Build image
+# Build image for AMD64 (OpenShift cluster architecture)
 cd "$(dirname "$0")"
-$CONTAINER_RUNTIME build -t "$FULL_IMAGE" -f Dockerfile ..
+$CONTAINER_RUNTIME build --platform linux/amd64 -t "$FULL_IMAGE" -f Dockerfile ..
 
 echo ""
 echo "Image built successfully!"

@@ -5,8 +5,8 @@
 # This script performs end-to-end JWT-SVID authentication test with Keycloak
 #
 # Prerequisites:
-# - spire-agent binary installed in jwt-test-client pod (run install-spire-agent-binary.sh first)
-# - Keycloak client configuration correct (run fix-keycloak-client-config.sh if needed)
+# - jwt-test-client Pod running (uses custom image with embedded spire-agent binary)
+# - Keycloak client configuration correct (automatically configured via GitOps)
 #
 # Usage:
 #   ./test-jwt-svid-complete.sh
@@ -47,21 +47,21 @@ fi
 
 echo "✓ jwt-test-client Pod: $CLIENT_POD"
 
-# Check if spire-agent binary exists
+# Check if spire-agent binary exists (embedded in custom image)
 echo ""
 echo "3. Checking spire-agent binary..."
-if oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- sh -c "test -x /tmp/spire-agent" &>/dev/null; then
-    echo "✓ spire-agent binary found at /tmp/spire-agent"
-    SPIRE_AGENT_PATH="/tmp/spire-agent"
-elif oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- sh -c "test -x /usr/local/bin/spire-agent" &>/dev/null; then
-    echo "✓ spire-agent binary found at /usr/local/bin/spire-agent"
-    SPIRE_AGENT_PATH="/usr/local/bin/spire-agent"
-else
-    echo "✗ spire-agent binary not found"
+SPIRE_AGENT_PATH="/usr/local/bin/spire-agent"
+
+if ! oc exec "$CLIENT_POD" -n "$CLIENT_NAMESPACE" -c client -- sh -c "test -x $SPIRE_AGENT_PATH" &>/dev/null; then
+    echo "✗ spire-agent binary not found at $SPIRE_AGENT_PATH"
     echo ""
-    echo "Please run: ./scripts/install-spire-agent-binary.sh"
+    echo "Note: The custom image (quay.io/kamori/jwt-svid-test-client:v1.0) should include spire-agent binary."
+    echo "Please verify the Pod is using the correct image:"
+    echo "  oc get pod $CLIENT_POD -n $CLIENT_NAMESPACE -o jsonpath='{.spec.containers[0].image}'"
     exit 1
 fi
+
+echo "✓ spire-agent binary found at $SPIRE_AGENT_PATH"
 
 # Fetch JWT-SVID
 echo ""

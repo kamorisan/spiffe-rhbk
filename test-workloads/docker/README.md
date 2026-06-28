@@ -21,16 +21,31 @@ The custom image solves the following problems:
 
 ## Build and Push
 
+**重要:** OpenShiftクラスターはAMD64アーキテクチャのため、Macでビルドする場合は`--platform linux/amd64`を指定してください。
+
 ```bash
 # Login to registry
 podman login quay.io
 
-# Build image
-podman build -t quay.io/<your-username>/jwt-svid-test-client:latest \
-  -f test-workloads/docker/Dockerfile .
+# Build image for AMD64 (OpenShift cluster architecture)
+cd test-workloads/docker
+podman build --platform linux/amd64 \
+  -t quay.io/<your-username>/jwt-svid-test-client:v1.0 \
+  -f Dockerfile ..
 
 # Push image
-podman push quay.io/<your-username>/jwt-svid-test-client:latest
+podman push quay.io/<your-username>/jwt-svid-test-client:v1.0
+```
+
+**自動化スクリプト:**
+
+```bash
+# Set environment variables
+export REGISTRY_USER=<your-username>
+export IMAGE_TAG=v1.0
+
+# Run build script
+./build-and-push.sh
 ```
 
 ## Update Deployment
