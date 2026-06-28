@@ -1,0 +1,50 @@
+sequenceDiagram
+    participant Client as jwt-test-client Pod
+    participant CSI as SPIFFE CSI Driver
+    participant Agent as SPIRE Agent
+    participant Server as SPIRE Server
+    participant OIDC as SPIRE OIDC Discovery<br/>Provider
+    participant KC as Keycloak / RHBK
+
+    Note over Client,KC: JWT-SVID Client Authentication Flow (実測値版)
+
+    rect rgb(240, 248, 255)
+        Note right of Client: Step 1: JWT-SVID取得
+        Client->>CSI: Mount /spiffe-workload-api/spire-agent.sock
+        CSI-->>Client: Socket available
+        Client->>Agent: Fetch JWT-SVID<br/>audience = https://keycloak-rhbk-demo.apps.CLUSTER/realms/spiffe
+        Agent->>Server: Request JWT-SVID<br/>SPIFFE ID = spiffe://example.org/ns/rhbk-demo/sa/myclient
+        Server->>Server: Sign JWT with private key
+        Note over Server,OIDC: OIDC Discovery ProviderはJWT-SVIDのiss URLとして機能
+        Server-->>Agent: JWT-SVID
+        Agent-->>Client: JWT-SVID<br/>sub: spiffe://example.org/ns/rhbk-demo/sa/myclient<br/>iss: https://spire-oidc-discovery-provider-...<br/>aud: https://keycloak-rhbk-demo.../realms/spiffe
+    end
+
+    rect rgb(255, 250, 240)
+        Note right of Client: Step 2: Token Request
+        Client->>KC: POST /realms/spiffe/protocol/openid-connect/token<br/>grant_type=client_credentials<br/>client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-spiffe<br/>client_assertion=JWT-SVID<br/>※client_idは送信しない
+    end
+
+    rect rgb(240, 255, 240)
+        Note right of KC: Step 3: JWT-SVID検証
+        KC->>KC: Extract sub from JWT-SVID<br/>spiffe://example.org/ns/rhbk-demo/sa/myclient
+        KC->>KC: Find Client by jwt.credential.sub
+        KC->>KC: Get SPIFFE IdP<br/>jwt.credential.issuer = "spiffe" (alias)
+        Note over KC,Server: Keycloakの公開鍵取得先はSPIRE Server Bundle Endpoint
+        KC->>Server: GET Bundle Endpoint<br/>https://spire-server.zero-trust-workload-identity-manager.svc:8443
+        Server-->>KC: SPIFFE Bundle / JWKS<br/>use: jwt-svid
+        KC->>KC: Verify JWT-SVID signature with JWKS
+        KC->>KC: Validate JWT claims<br/>sub, iss, aud, exp
+    end
+
+    rect rgb(255, 240, 245)
+        Note right of KC: Step 4: Access Token発行
+        KC->>KC: Authentication successful
+        KC->>KC: Generate Access Token<br/>client_id=myclient (resolved from sub)
+        KC-->>Client: HTTP 200 OK<br/>access_token: eyJhbGci...<br/>expires_in: 300<br/>token_type: Bearer<br/>scope: email profile
+    end
+
+    Note over Client,KC: ✅ Authentication Complete
+
+    Note over OIDC: OIDC Discovery Provider役割:<br/>・JWT-SVIDのiss URL<br/>・外部OIDC Federation用途
+    Note over Server: SPIRE Server Bundle Endpoint:<br/>・Keycloakの公開鍵取得先<br/>・profile=https_web
