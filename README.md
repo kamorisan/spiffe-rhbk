@@ -52,67 +52,11 @@ Red Hat build of Keycloak (RHBK) + OpenShift Zero Trust Workload Identity Manage
 
 </details>
 
-#### Step 1: JWT-SVID取得フロー
+**認証フローの詳細:**
 
-![Step 1: JWT-SVID Fetch](images/auth-flow-step1.svg)
-
-**JWT-SVID取得プロセス:**
-
-1. **Application** → **SPIFFE CSI Driver**: Workload API Socketへアクセス
-   - CSI DriverがUNIXソケット（`/spiffe-workload-api/spire-agent.sock`）をマウント
-   
-2. **Application** → **SPIRE Agent**: Workload API経由でJWT-SVIDをリクエスト
-   - gRPC呼び出し（JWTSVIDsリクエスト）
-   - `audience`: Keycloak realm issuer URL
-     - 実測値: `https://keycloak-rhbk-demo.apps.cluster-hb456.../realms/spiffe`
-   
-3. **SPIRE Agent** → **SPIRE Server**: SPIFFE IDでJWT-SVIDを要求
-   - ClusterSPIFFEIDテンプレートに基づきSPIFFE ID決定
-   - 実測値: `spiffe://example.org/ns/rhbk-demo/sa/myclient`
-
-4. **SPIRE Server**: 秘密鍵でJWT-SVIDに署名
-
-5. **SPIRE Server** → **SPIRE Agent** → **Application**: JWT-SVID返却
-   - **実測Claims**:
-     - `sub`: `spiffe://example.org/ns/rhbk-demo/sa/myclient`
-     - `iss`: `https://spire-oidc-discovery-provider-spiffe-system.apps.cluster-hb456...`
-     - `aud`: `https://keycloak-rhbk-demo.apps.cluster-hb456.../realms/spiffe`
-     - `exp`: unix timestamp
-
-#### Step 2-4: Keycloak認証フロー
-
-![Step 2-4: Keycloak Authentication](images/auth-flow-step2-4.svg)
-
-**Keycloak認証プロセス:**
-
-**Step 2: Token Request**
-- **jwt-test-client** → **Keycloak**: Token EndpointにJWT-SVIDを送信
-  - `grant_type=client_credentials`
-  - `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-spiffe`
-  - `client_assertion=<JWT-SVID>`
-  - **重要**: `client_id`は送信しない（JWT-SVIDの`sub`から解決される）
-
-**Step 3: JWT-SVID検証**
-- **3a**: JWT-SVIDから`sub`クレームを抽出
-  - 実測値: `spiffe://example.org/ns/rhbk-demo/sa/myclient`
-- **3b**: `jwt.credential.sub`でClientを検索（PostgreSQLから取得）
-- **3c**: Clientの`jwt.credential.issuer`（alias: `spiffe`）からSPIFFE IdPを取得
-- **3d**: SPIRE Server Bundle Endpointから公開鍵を取得
-  - **実構成**: `https://spire-server.zero-trust-workload-identity-manager.svc.cluster.local:8443`
-  - **注**: OIDC Discovery ProviderではなくSPIRE Serverから直接取得
-- **3e**: JWT-SVIDの署名を公開鍵で検証
-- **3f**: JWTクレーム（`sub`, `iss`, `aud`, `exp`）を検証
-  - `iss`: SPIRE OIDC Discovery Provider URL（実測値）
-  - `aud`: Keycloak realm issuer URL
-
-**Step 4: Access Token発行**
-- **4a**: 認証成功
-- **4b**: Access Token生成（`client_id=myclient`は`sub`から解決）
-- **4c**: HTTP 200 OK でAccess Token返却
-  - `access_token`: Bearer Token
-  - `expires_in`: 300秒
-  - `token_type`: Bearer
-  - `scope`: email profile
+完全な認証フロー（Step 1-4）はv2図に統合されています。ステップ別の詳細図が必要な場合は、以下のファイルを参照してください：
+- Step 1（JWT-SVID取得）: [images/auth-flow-step1.svg](images/auth-flow-step1.svg)
+- Step 2-4（Keycloak認証）: [images/auth-flow-step2-4.svg](images/auth-flow-step2-4.svg)
 
 ## デプロイ
 
