@@ -147,7 +147,11 @@ spiffe-rhbk/
 ├── rhbk/                         # Keycloak + PostgreSQL
 ├── keycloak-config/              # Keycloak設定Job
 ├── test-workloads/               # テスト用Pod
-└── docs/                         # ドキュメント
+│   ├── base/                     # jwt-test-client Deployment
+│   └── docker/                   # カスタムイメージビルド
+├── scripts/                      # テストスクリプト
+├── docs/                         # ドキュメント
+└── deprecated/                   # 廃止されたスクリプト（参考用）
 ```
 
 ## 検証
