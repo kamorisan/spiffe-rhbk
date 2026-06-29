@@ -33,30 +33,25 @@ Red Hat build of Keycloak (RHBK) + OpenShift Zero Trust Workload Identity Manage
 
 ### JWT-SVID認証フロー
 
-#### 全体フロー（実測値版・推奨）
+![Authentication Flow Diagram](images/auth-flow-v2.svg)
 
-![Authentication Flow Diagram v2](images/auth-flow-v2.svg)
-
-**v2の主な改善点:**
-- 実際の成功ログから取得した値を反映
+**主な特徴:**
+- 実際の成功ログから取得した値を反映（実測値ベース）
 - SPIFFE ID: `spiffe://example.org/ns/rhbk-demo/sa/myclient` (ServiceAccount形式)
-- JWT-SVID `iss`: SPIRE OIDC Discovery Provider URL（実測値）
+- JWT-SVID `iss`: SPIRE OIDC Discovery Provider URL
 - Keycloakの公開鍵取得先: SPIRE Server Bundle Endpoint（実構成）
-- `client_id`は送信しない（実際の成功パターン）
+- `client_id`は送信不要（JWT-SVIDの`sub`から自動解決）
 - OIDC Discovery Providerの役割を明確化
 
 <details>
-<summary>旧バージョン（参考）</summary>
+<summary>アーカイブされた図（参考用）</summary>
 
-![Authentication Flow Diagram v1](images/auth-flow.svg)
+ステップ別の詳細図およびv1図は以下のアーカイブから参照できます：
+- v1統合図: [archive/images/auth-flow.svg](archive/images/auth-flow.svg)
+- Step 1（JWT-SVID取得）: [archive/images/auth-flow-step1.svg](archive/images/auth-flow-step1.svg)
+- Step 2-4（Keycloak認証）: [archive/images/auth-flow-step2-4.svg](archive/images/auth-flow-step2-4.svg)
 
 </details>
-
-**認証フローの詳細:**
-
-完全な認証フロー（Step 1-4）はv2図に統合されています。ステップ別の詳細図が必要な場合は、以下のファイルを参照してください：
-- Step 1（JWT-SVID取得）: [images/auth-flow-step1.svg](images/auth-flow-step1.svg)
-- Step 2-4（Keycloak認証）: [images/auth-flow-step2-4.svg](images/auth-flow-step2-4.svg)
 
 ## デプロイ
 
